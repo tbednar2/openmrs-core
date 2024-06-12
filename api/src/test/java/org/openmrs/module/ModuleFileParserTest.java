@@ -70,35 +70,32 @@ public class ModuleFileParserTest extends BaseContextSensitiveTest {
 
 	@Test
 	public void moduleFileParser_shouldFailCreatingParserFromFileIfGivenNull() {
-
 		expectModuleExceptionWithTranslatedMessage(() -> new ModuleFileParser((File) null), "Module.error.fileCannotBeNull");
 	}
 
 	@Test
 	public void moduleFileParser_shouldFailCreatingParserFromFileIfNotEndingInOmod() {
-
 		expectModuleExceptionWithTranslatedMessage(() -> new ModuleFileParser(new File("reporting.jar")), "Module.error.invalidFileExtension");
 	}
 
 	@Test
 	public void moduleFileParser_shouldFailCreatingParserFromFileIfInputStreamClosed() throws IOException {
-
 		File moduleFile = new File(getClass().getClassLoader().getResource(LOGIC_MODULE_PATH).getPath());
 
-		InputStream inputStream = new FileInputStream(moduleFile);
-		inputStream.close();
-
-		expectModuleExceptionWithTranslatedMessage(() -> new ModuleFileParser(inputStream), "Module.error.cannotCreateFile");
+		try (InputStream inputStream = new FileInputStream(moduleFile)) {
+			inputStream.close();
+			expectModuleExceptionWithTranslatedMessage(() -> new ModuleFileParser(inputStream), "Module.error.cannotCreateFile");
+		}
 	}
 
 	@Test
 	public void parse_shouldParseValidXmlConfigCreatedFromInputStream() throws IOException {
-
 		File moduleFile = new File(getClass().getClassLoader().getResource(LOGIC_MODULE_PATH).getPath());
 
-		ModuleFileParser parser = new ModuleFileParser(new FileInputStream(moduleFile));
-
-		Module module = parser.parse();
+		Module module;
+		try (FileInputStream moduleFileInputStream = new FileInputStream(moduleFile)) {
+			module = new ModuleFileParser().parse(moduleFileInputStream);
+		}
 
 		assertThat(module.getModuleId(), is("logic"));
 		assertThat(module.getVersion(), is("0.2"));
@@ -122,21 +119,18 @@ public class ModuleFileParserTest extends BaseContextSensitiveTest {
 		String invalidConfigVersion = "0.0.1";
 		String expectedMessage = messageSourceService
 			.getMessage("Module.error.invalidConfigVersion",
-				new Object[] { invalidConfigVersion, "1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6" }, Context.getLocale());
+				new Object[] { invalidConfigVersion, "1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7" }, Context.getLocale());
 
 		Document configXml = documentBuilder.newDocument();
 		Element root = configXml.createElement("module");
 		configXml.appendChild(root);
 		configXml.getDocumentElement().setAttribute("configVersion", invalidConfigVersion);
 
-		ModuleFileParser parser = new ModuleFileParser(writeConfigXmlToFile(configXml));
-
-		expectModuleExceptionWithMessage(() -> parser.parse(), expectedMessage);
+		expectModuleExceptionWithMessage(() -> new ModuleFileParser().parse(writeConfigXmlToFile(configXml)), expectedMessage);
 	}
 
 	@Test
 	public void parse_shouldParseValidLogicModuleFromFile() {
-
 		File moduleFile = new File(getClass().getClassLoader().getResource(LOGIC_MODULE_PATH).getPath());
 		ModuleFileParser parser = new ModuleFileParser(Context.getMessageSourceService());
 

@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,7 +27,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -155,7 +156,11 @@ public class WebModuleUtil {
 				while (entries.hasMoreElements()) {
 					JarEntry entry = entries.nextElement();
 					String name = entry.getName();
-					log.debug("Entry name: " + name);
+					if (Paths.get(name).startsWith("..")) {
+						throw new UnsupportedOperationException("Attempted to write file '" + name + "' rejected as it attempts to write outside the chosen directory. This may be the result of a zip-slip style attack.");
+					}
+					
+					log.debug("Entry name: {}", name);
 					if (name.startsWith("web/module/")) {
 						// trim out the starting path of "web/module/"
 						String filepath = name.substring(11);
@@ -441,6 +446,8 @@ public class WebModuleUtil {
 			Node node = servletTags.item(i);
 			NodeList childNodes = node.getChildNodes();
 			String name = "", className = "";
+
+			Map<String, String> initParams = new HashMap<>();
 			for (int j = 0; j < childNodes.getLength(); j++) {
 				Node childNode = childNodes.item(j);
 				if ("servlet-name".equals(childNode.getNodeName())) {
@@ -449,6 +456,21 @@ public class WebModuleUtil {
 					}
 				} else if ("servlet-class".equals(childNode.getNodeName()) && childNode.getTextContent() != null) {
 					className = childNode.getTextContent().trim();
+				} else if ("init-param".equals(childNode.getNodeName())) {
+					NodeList initParamChildren = childNode.getChildNodes();
+					String paramName = null, paramValue = null;
+					for (int k = 0; k < initParamChildren.getLength(); k++) {
+						Node initParamChild = initParamChildren.item(k);
+						if ("param-name".equals(initParamChild.getNodeName()) && initParamChild.getTextContent() != null) {
+							paramName = initParamChild.getTextContent().trim();
+						} else if ("param-value".equals(initParamChild.getNodeName()) && initParamChild.getTextContent() != null) {
+							paramValue = initParamChild.getTextContent().trim();
+						}
+					}
+
+					if (paramName != null && paramValue != null) {
+						initParams.put(paramName, paramValue);
+					}
 				}
 			}
 			if (name.length() == 0 || className.length() == 0) {
@@ -480,7 +502,7 @@ public class WebModuleUtil {
 			
 			try {
 				log.debug("Initializing {} servlet. - {}.", name, httpServlet);
-				ServletConfig servletConfig = new ModuleServlet.SimpleServletConfig(name, servletContext);
+				ServletConfig servletConfig = new ModuleServlet.SimpleServletConfig(name, servletContext, initParams);
 				httpServlet.init(servletConfig);
 			}
 			catch (Exception e) {
@@ -1032,7 +1054,7 @@ public class WebModuleUtil {
 			log.error("Failed to transorm xml source", tfe);
 		}
 	}
-	
+
 	public static String getRealPath(ServletContext servletContext) {
 		return servletContext.getRealPath("");
 	}

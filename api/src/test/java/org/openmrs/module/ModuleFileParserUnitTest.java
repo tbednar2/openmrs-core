@@ -14,6 +14,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.StringStartsWith.startsWith;
@@ -533,6 +534,107 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	}
 
 	@Test
+	public void parse_shouldParseStartBeforeModulesWithoutChildren() throws IOException {
+		Document config = buildOnValidConfigXml()
+			.withStartBeforeModules()
+			.build();
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), is(equalTo(Collections.EMPTY_LIST)));
+	}
+
+	@Test
+	public void parse_shouldParseStartBeforeModulesOnlyContainingText() throws IOException {
+		Document config = buildOnValidConfigXml()
+			.withTextNode("start_before_modules", "will be ignored")
+			.build();
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), is(equalTo(Collections.EMPTY_LIST)));
+	}
+
+	@Test
+	public void parse_shouldParseStartBeforeModulesContainingDuplicatesAndKeepOnlyOneModule()
+		throws IOException {
+
+		Document config = buildOnValidConfigXml()
+			.withStartBeforeModules(
+				"org.openmrs.module.serialization.xstream",
+				"org.openmrs.module.serialization.xstream"
+			)
+			.build();
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), hasSize(1));
+		assertThat(module.getStartBeforeModules(), hasItems("org.openmrs.module.serialization.xstream"));
+	}
+
+	@Test
+	public void parse_shouldParseStartBeforeModulesContainingMultipleChildren() throws IOException {
+		Document config = buildOnValidConfigXml()
+			.withStartBeforeModules(
+				"org.openmrs.module.serialization.xstream",
+				"org.openmrs.module.legacyui"
+			)
+			.build();
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), hasSize(2));
+		assertThat(module.getStartBeforeModules(),
+			hasItems("org.openmrs.module.serialization.xstream", "org.openmrs.module.legacyui"));
+	}
+
+	@Test
+	public void parse_shouldParseStartBeforeModulesContainingModuleChildren() throws IOException {
+		Document config = buildOnValidConfigXml().build();
+
+		Element startBeforeModules = config.createElement("start_before_modules");
+		for (String module : new String[] { "org.openmrs.module.serialization.xstream", "org.openmrs.module.legacyui" }) {
+			Element startBeforeModule = config.createElement("module");
+			startBeforeModule.setTextContent(module);
+			startBeforeModules.appendChild(startBeforeModule);
+		}
+		config.getDocumentElement().appendChild(startBeforeModules);
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), hasSize(2));
+		assertThat(module.getStartBeforeModules(),
+			hasItems("org.openmrs.module.serialization.xstream", "org.openmrs.module.legacyui"));
+	}
+
+	@Test
+	public void parse_shouldParseStartBeforeModulesContainingMixedChildren() throws IOException {
+		Document config = buildOnValidConfigXml().build();
+
+		Element startBeforeModules = config.createElement("start_before_modules");
+		for (String module : new String[] { "org.openmrs.module.xforms", "org.openmrs.module.idgen" }) {
+			Element startBeforeModule = config.createElement("start_before_module");
+			startBeforeModule.setTextContent(module);
+			startBeforeModules.appendChild(startBeforeModule);
+		}
+
+		for (String module : new String[] { "org.openmrs.module.serialization.xstream", "org.openmrs.module.legacyui" }) {
+			Element startBeforeModule = config.createElement("module");
+			startBeforeModule.setTextContent(module);
+			startBeforeModules.appendChild(startBeforeModule);
+		}
+		
+		config.getDocumentElement().appendChild(startBeforeModules);
+
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		assertThat(module.getStartBeforeModules(), hasSize(4));
+		assertThat(module.getStartBeforeModules(),
+			hasItems("org.openmrs.module.serialization.xstream", "org.openmrs.module.legacyui", 
+				"org.openmrs.module.xforms", "org.openmrs.module.idgen"));
+	}
+
+	@Test
 	public void parse_shouldParseExtensions() throws IOException {
 
 		Document config = buildOnValidConfigXml()
@@ -700,9 +802,9 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 		GlobalProperty gp2 = new GlobalProperty("report.validateInput", "2", "to validate input",
 			RegexValidatedTextDatatype.class, "^\\d+$");
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty(gp1.getProperty(), gp1.getPropertyValue(), gp1.getDescription(), null, null)
+			.withGlobalProperty(gp1.getProperty(), gp1.getPropertyValue(), gp1.getDescription(), null, null, null, null, null)
 			.withGlobalProperty(gp2.getProperty(), gp2.getPropertyValue(), gp2.getDescription(), gp2.getDatatypeClassname(),
-				gp2.getDatatypeConfig())
+				gp2.getDatatypeConfig(), null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -724,7 +826,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldParseGlobalPropertyAndTrimWhitespacesFromDescription() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "  \n\t delete reports after\t hours  ", null, null)
+			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "  \n\t delete reports after\t hours  ",
+				null, null, null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -737,7 +840,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldParseGlobalPropertyWithoutDescriptionElement() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty("report.deleteReportsAgeInHours", "72", null, null, null)
+			.withGlobalProperty("report.deleteReportsAgeInHours", "72", null,
+				null, null, null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -752,7 +856,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 
 		GlobalProperty gp1 = new GlobalProperty("report.deleteReportsAgeInHours", "72", "delete reports after");
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty(gp1.getProperty(), gp1.getPropertyValue(), gp1.getDescription(), null, null)
+			.withGlobalProperty(gp1.getProperty(), gp1.getPropertyValue(), gp1.getDescription(), null,
+				null, null, null, null)
 			.build();
 		config.getElementsByTagName("globalProperty").item(0).appendChild(config.createElement("ignoreMe"));
 
@@ -791,7 +896,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldIgnoreGlobalPropertyWithoutPropertyElement() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty(null, "72", "some", null, null)
+			.withGlobalProperty(null, "72", "some", null, null,
+				null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -803,7 +909,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldIgnoreGlobalPropertyWithEmptyProperty() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty("  ", "72", "some", null, null)
+			.withGlobalProperty("  ", "72", "some", null, null,
+				null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -815,7 +922,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldIgnoreGlobalPropertyWithDatatypeClassThatIsNotSubclassingCustomDatatype() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "some", "java.lang.String", null)
+			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "some",
+				"java.lang.String", null, null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -827,7 +935,8 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	public void parse_shouldIgnoreGlobalPropertyWithDatatypeClassThatIsNotFound() throws IOException {
 
 		Document config = buildOnValidConfigXml()
-			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "some", "String", null)
+			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "some",
+				"String", null, null, null, null)
 			.build();
 
 		Module module = parser.parse(writeConfigXmlToFile(config));
@@ -1165,6 +1274,24 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 		assertThat(module.getAdvicePoints(), is(equalTo(Collections.EMPTY_LIST)));
 	}
 
+	@Test
+	public void parse_shouldParseGlobalPropertyPrivileges() throws IOException {
+		// setup
+		Document config = buildOnValidConfigXml()
+			.withGlobalProperty("report.deleteReportsAgeInHours", "72", "some",
+				null, null, "Some Privilege For View Global Properties",
+				"Some Privilege For Edit Global Properties", "Some Privilege For Delete Global Properties")
+			.build();
+
+		// replay
+		Module module = parser.parse(writeConfigXmlToFile(config));
+
+		// verify
+		assertThat(module.getGlobalProperties().get(0).getViewPrivilege().getPrivilege(), is("Some Privilege For View Global Properties"));
+		assertThat(module.getGlobalProperties().get(0).getEditPrivilege().getPrivilege(), is("Some Privilege For Edit Global Properties"));
+		assertThat(module.getGlobalProperties().get(0).getDeletePrivilege().getPrivilege(), is("Some Privilege For Delete Global Properties"));
+	}
+
 	private void expectModuleExceptionWithMessage(Executable executable, String expectedMessage) {
 		ModuleException exception = assertThrows(ModuleException.class, executable);
 		assertThat(exception.getMessage(), startsWith(expectedMessage));
@@ -1175,12 +1302,10 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 	}
 
 	private ModuleConfigXmlBuilder buildOnValidConfigXml() {
-
 		return buildOnValidConfigXml("1.6");
 	}
 
 	private ModuleConfigXmlBuilder buildOnValidConfigXml(String version) {
-
 		return new ModuleConfigXmlBuilder(documentBuilder)
 			.withModuleRoot()
 			.withConfigVersion(version)
@@ -1266,6 +1391,17 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 			return this;
 		}
 
+		public ModuleConfigXmlBuilder withStartBeforeModules(String... modules) {
+			Element startBeforeModules = configXml.createElement("start_before_modules");
+			for (String module : modules) {
+				Element startBeforeModule = configXml.createElement("start_before_module");
+				startBeforeModule.setTextContent(module);
+				startBeforeModules.appendChild(startBeforeModule);
+			}
+			configXml.getDocumentElement().appendChild(startBeforeModules);
+			return this;
+		}
+
 		public ModuleConfigXmlBuilder withPrivilege(String name, String description) {
 			Map<String, String> children = new HashMap<>();
 			if (name != null) {
@@ -1300,7 +1436,7 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 		}
 
 		public ModuleConfigXmlBuilder withGlobalProperty(String property, String defaultValue, String description,
-			String datatypeClassname, String datatypeConfig) {
+			String datatypeClassname, String datatypeConfig, String viewPrivilege, String editPrivilege, String deletePrivilege) {
 			Map<String, String> children = new HashMap<>();
 			if (property != null) {
 				children.put("property", property);
@@ -1316,6 +1452,15 @@ public class ModuleFileParserUnitTest extends BaseContextMockTest {
 			}
 			if (datatypeConfig != null) {
 				children.put("datatypeConfig", datatypeConfig);
+			}
+			if (viewPrivilege != null) {
+				children.put("viewPrivilege", viewPrivilege);
+			}
+			if (editPrivilege != null) {
+				children.put("editPrivilege", editPrivilege);
+			}
+			if (deletePrivilege != null) {
+				children.put("deletePrivilege", deletePrivilege);
 			}
 			return withElementsAttachedToRoot("globalProperty", children);
 		}

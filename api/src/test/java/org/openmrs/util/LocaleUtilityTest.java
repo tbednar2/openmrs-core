@@ -3,7 +3,7 @@
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
  * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
- *
+ * 
  * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
  * graphic logo is a trademark of OpenMRS Inc.
  */
@@ -182,11 +182,31 @@ public class LocaleUtilityTest extends BaseContextSensitiveTest {
 	 * @see LocaleUtility#fromSpecification(String)
 	 */
 	@Test
+	public void fromSpecification_shouldGetLocaleFromBCP47Format() {
+		assertEquals(Locale.UK, LocaleUtility.fromSpecification("en-GB"));
+	}
+
+	/**
+	 * @see LocaleUtility#fromSpecification(String)
+	 */
+	@Test
+	public void fromSpecification_shouldReturnNullWhenLocaleFormatIsIncorrectLocaleFromBCP47Format() {
+		LocaleUtility.fromSpecification("en-USA");
+		LocaleUtility.fromSpecification("en_USA");
+		assertEquals(LocaleUtility.fromSpecification("en-USA"), null);
+		assertEquals(LocaleUtility.fromSpecification("en_USA"), null);
+	}
+	
+	/**
+	 * @see LocaleUtility#fromSpecification(String)
+	 */
+	@Test
 	public void fromSpecification_shouldGetLocaleFromLanguageCodeCountryCodeAndVariant() {
 		Locale locale = LocaleUtility.fromSpecification("en_US_Traditional_WIN");
 		assertEquals(Locale.US.getLanguage(), locale.getLanguage());
 		assertEquals(Locale.US.getCountry(), locale.getCountry());
-		assertEquals("Traditional,WIN", locale.getDisplayVariant());
+		// In Java 17 locale.getDisplayVariant() is formatted like 'Traditional, WIN'
+		assertEquals("Traditional,WIN", locale.getDisplayVariant().replaceAll(" ", ""));
 	}
 	
 	/**
